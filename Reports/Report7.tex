@@ -230,6 +230,81 @@ Visualize the all-day trajectory of a vehicle, the results can be obtained as sh
 
 \clearpage
 \section{Geomagnetic Data Processing}
+\subsection{Dataset}
+\begin{itemize}
+  \item Data source: Communications Bureau of Shenzhen 
+  \item Region: Shenzhen
+  \item Time: 2019-12-02
+  \item Content: Traffic flow data of main roads in Shenzhen
+    \begin{itemize}
+      \item Cross id
+      \item Upload time
+      \item Speed
+      \item Car type
+      \item \dots
+    \end{itemize}
+\end{itemize}
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/7-3-1.png}
+  \label{fig: 731}
+\end{figure}
+
+\subsection{Data Processing}
+Because traffic flow data from geomagnetic device is unprocessed original data, there is error data in the process of data acquisition, especially the time data. Besides, there are many kinds of device not only geomagnetic sensor and there are also 2 kinds of data type. Only use data detected by geomagnetic and real time data, so the data need to be screened to a certain extent. In addition, Visualizing the distribution of each point on the road network map in Shenzhen to detect the drift of geomagnetic position information.
+\begin{enumerate}
+  \item Extract the data whose data type is 2 and device is geomagnetic sensor.
+  \item Remove duplicate data of the records.
+  \item Remove data with the wrong date. There is data loss when recording, and there are many data records outside the specified date range, such as 239:69:123, which need to be filtered.
+\end{enumerate}
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=\textwidth]{images/7-3-2.png}
+  \label{fig: 732}
+  \caption{Distribution of Each Point}
+\end{figure}
+
+\subsection{Data Visualization}
+Group traffic flow data by 15 min as time interval and draw line charts of the speed and traffic flow over time to verify the authenticity.
+\clearpage
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/7-3-3.png}
+  \caption{Mean Speed over Time}
+  \label{fig: 733}
+\end{figure}
+\begin{figure}[b]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/7-3-4.png}
+  \caption{Mean Traffic flow over Time}
+  \label{fig: 734}
+\end{figure}
+
+\clearpage
+Visualize 10 main roads to the neighborhood in speed and traffic flow grid charts during heavy traffic hours to reflect road congestion and its spread, it can also verify whether it conforms to the real situation of main road and analyze the outliers to find out the reasons or remove them.
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.6\textwidth]{images/7-3-5.png}
+  \caption{Traffic Flow Grid Chart}
+  \label{fig: 735}
+\end{figure}
+\begin{figure}[h!]
+  \centering
+  \includegraphics[height=\dimexpr\pagegoal-\pagetotal-4\baselineskip\relax,
+                  width=0.6\textwidth,
+                  keepaspectratio]
+                  {images/7-3-6.png}
+  \caption{Speed Grid Chart}
+  \label{fig: 736}
+\end{figure}
+
+According to the geomagnetic data of a day, the traffic flow of each road in each time period is counted and divided into groups by roads at intervals of 15 minutes. Circle, corresponding radius of traffic flow, Selenium library and Image library are used to synthesize the dynamic traffic flow map.
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=\textwidth]{images/7-3-7/f5ef9dc31d044acac988911ed92b0494EgYhqvGPburiSExo-22.png}
+  \caption{Dynamic Traffic Flow Map}
+  \label{fig: 737}
+\end{figure}
 
 \clearpage
 \section{Road Graph Model \& Map Matching}
