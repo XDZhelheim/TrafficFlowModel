@@ -93,8 +93,6 @@ def get_track(file_path):
     
     print("../data/taxi_after_proc/tracks/{}".format(file_path.split("/")[-1]))
 
-N=30
-
 if __name__ == "__main__":
     pool=mp.Pool(32)
 
