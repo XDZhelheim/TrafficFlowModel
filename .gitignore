@@ -132,5 +132,6 @@ data/
 cache*
 temp*
 model/
+results/
 
 .DS_Store
