@@ -275,7 +275,7 @@ def fmm2atom():
 
 if __name__ == "__main__":
     if os.path.split(os.path.dirname(os.path.realpath(__file__)))[-1] != "data_process":
-        print("Wrong working dir")
+        print("Wrong working dir.")
         exit(1)
     
     download_osm()

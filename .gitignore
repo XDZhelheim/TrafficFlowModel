@@ -131,7 +131,6 @@ dmypy.json
 data/
 cache*
 temp*
-model/
-results/
+saved_model/
 
 .DS_Store
