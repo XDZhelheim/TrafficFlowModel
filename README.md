@@ -43,13 +43,13 @@ Suppose conda environment for LibCity is `torch1.7`.
 
 ```bash
 model_list=(GRU LSTM FNN AutoEncoder \
-Seq2Seq ASTGCN MSTGCN AGCRN CONVGCN STSGCN ToGCN ResLSTM CRANN Multi-STGCnet DGCN DSAN STNN \
+Seq2Seq ASTGCN MSTGCN AGCRN CONVGCN STSGCN ToGCN ResLSTM DGCN DSAN STNN \
 DCRNN STGCN GWNET MTGNN)
 ```
 
 Run:
 ```bash
-./shell/run_baseline.sh <GPU_ID>
+./scripts/run_baseline.sh <GPU ID> <Max Epoch> <Batch Size>
 ```
 
 Logs are at `Bigscity-LibCity/log`.
