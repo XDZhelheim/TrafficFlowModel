@@ -1,3 +1,4 @@
+from tracemalloc import start
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -6,17 +7,19 @@ from tqdm import tqdm
 import networkx as nx
 import osmnx as ox
 import json
+import time
 
 DATA_PATH = "../data/"
-TAXI_DATA_PATH = "../data/taxi_after_proc/merged"
+TAXI_DATA_PATH = "../data/taxi_after_proc/clean202006"
+DATASET = "sz_taxi_202006"
 
 MIN_LAT = 22.5310
 MAX_LAT = 22.5397
 MIN_LNG = 114.0442
 MAX_LNG = 114.0633
 
-START_DAY = 2
-END_DAY = 6
+START_DAY = 1
+END_DAY = 30
 
 DOWNSAMPLING_INTERVAL = 30
 TRAJ_SPLIT_INTERVAL = 600
@@ -68,14 +71,15 @@ def download_osm():
 
     # save .pkl
     nx.write_gpickle(graph_drive,
-                     path=os.path.join(DATA_PATH, "graph_drive.pkl"))
+                     path=os.path.join(DATA_PATH, DATASET, "graph_drive.pkl"))
     nx.write_gpickle(line_graph_drive,
-                     path=os.path.join(DATA_PATH, "line_graph_drive.pkl"))
+                     path=os.path.join(DATA_PATH, DATASET,
+                                       "line_graph_drive.pkl"))
 
     # shapefiles for fmm
     save_graph_shapefile_directional(graph_drive,
                                      filepath=os.path.join(
-                                         DATA_PATH, "fmm_data"))
+                                         DATA_PATH, DATASET, f"fmm_{DATASET}"))
 
 
 def contains(lat, lng):
@@ -83,7 +87,8 @@ def contains(lat, lng):
 
 
 def gen_fmm_dataset():
-    gps_file = open(os.path.join(DATA_PATH, "fmm_data", "gps.csv"), "w")
+    gps_file = open(
+        os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "gps.csv"), "w")
     gps_file.write("id;x;y;time\n")
 
     timedelta_downsampling = pd.Timedelta(seconds=DOWNSAMPLING_INTERVAL)
@@ -96,8 +101,8 @@ def gen_fmm_dataset():
             continue
         if os.path.getsize(os.path.join(TAXI_DATA_PATH, taxi_file)) < 100:
             continue
-        df_taxi = pd.read_csv(os.path.join(TAXI_DATA_PATH, taxi_file),
-                              parse_dates=["gps_time"])
+        # df_taxi = pd.read_csv(os.path.join(TAXI_DATA_PATH, taxi_file), parse_dates=["gps_time"])
+        df_taxi = pd.read_pickle(os.path.join(TAXI_DATA_PATH, taxi_file))
         if df_taxi.empty:
             continue
 
@@ -125,20 +130,22 @@ def gen_fmm_dataset():
 def run_fmm():
     os.system(
         "ubodt_gen --network {} --network_id fid --source u --target v --output {} --delta 0.03 --use_omp"
-        .format(os.path.join(DATA_PATH, "fmm_data", "edges.shp"),
-                os.path.join(DATA_PATH, "fmm_data", "ubodt.txt")))
+        .format(
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp"),
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "ubodt.txt")))
     os.system(
         "fmm --ubodt {} --network {} --network_id fid --source u --target v --gps {} --gps_point -k 8 -r 0.003 -e 0.0005 --output {} --use_omp --output_fields id,opath,cpath,mgeom > {} 2>&1"
-        .format(os.path.join(DATA_PATH, "fmm_data", "ubodt.txt"),
-                os.path.join(DATA_PATH, "fmm_data", "edges.shp"),
-                os.path.join(DATA_PATH, "fmm_data", "gps.csv"),
-                os.path.join(DATA_PATH, "fmm_data", "mr.txt"),
-                os.path.join(DATA_PATH, "fmm_data", "fmm.log")))
+        .format(
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "ubodt.txt"),
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp"),
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "gps.csv"),
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "mr.txt"),
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "fmm.log")))
 
 
 def fmm2geo():
     df_edges = gpd.GeoDataFrame.from_file(
-        os.path.join(DATA_PATH, "fmm_data", "edges.shp"))
+        os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp"))
 
     df_geo = pd.DataFrame()
 
@@ -147,15 +154,15 @@ def fmm2geo():
     df_geo["coordinates"] = df_edges["geometry"].apply(
         lambda x: list(x.coords))
 
-    df_geo.to_csv(os.path.join(DATA_PATH, "sz_taxi", "sz_taxi.geo"),
+    df_geo.to_csv(os.path.join(DATA_PATH, DATASET, f"{DATASET}.geo"),
                   index=False)
 
 
 def fmm2rel():
     df_edges = gpd.GeoDataFrame.from_file(
-        os.path.join(DATA_PATH, "fmm_data", "edges.shp"))
+        os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp"))
     line_graph = nx.read_gpickle(
-        os.path.join(DATA_PATH, "line_graph_drive.pkl"))
+        os.path.join(DATA_PATH, DATASET, "line_graph_drive.pkl"))
 
     df_right = df_edges[["u", "v", "key", "fid"]]
 
@@ -185,18 +192,20 @@ def fmm2rel():
     df_rel = pd.DataFrame(
         rel, columns=["rel_id", "type", "origin_id", "destination_id"])
 
-    df_rel.to_csv(os.path.join(DATA_PATH, "sz_taxi", "sz_taxi.rel"),
+    df_rel.to_csv(os.path.join(DATA_PATH, DATASET, f"{DATASET}.rel"),
                   index=False)
 
 
 def fmm2dyna():
-    df_fmm_res = pd.read_csv(os.path.join(DATA_PATH, "fmm_data", "mr.txt"),
+    df_fmm_res = pd.read_csv(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}",
+                                          "mr.txt"),
                              sep=";")
-    df_fmm_data = pd.read_csv(os.path.join(DATA_PATH, "fmm_data", "gps.csv"),
+    df_fmm_data = pd.read_csv(os.path.join(DATA_PATH, DATASET,
+                                           f"fmm_{DATASET}", "gps.csv"),
                               sep=";",
                               parse_dates=["time"])
 
-    dyna_file = open(os.path.join(DATA_PATH, "sz_taxi", "sz_taxi.dyna"), "w")
+    dyna_file = open(os.path.join(DATA_PATH, DATASET, f"{DATASET}.dyna"), "w")
     dyna_file.write("dyna_id,type,time,entity_id,flow\n")
 
     assert (N != -1)
@@ -247,9 +256,9 @@ def gen_config():
     config["dyna"]["state"] = {"entity_id": "geo_id", "flow": "num"}
 
     config["info"] = {}
-    config["info"]["data_files"] = "sz_taxi"
-    config["info"]["geo_file"] = "sz_taxi"
-    config["info"]["rel_file"] = "sz_taxi"
+    config["info"]["data_files"] = DATASET
+    config["info"]["geo_file"] = DATASET
+    config["info"]["rel_file"] = DATASET
     config["info"]["data_col"] = ["flow"]
     config["info"]["output_dim"] = 1
     config["info"]["time_intervals"] = 60 * FLOW_AGG_INTERVAL_MINUTE
@@ -261,7 +270,7 @@ def gen_config():
     # config["info"]["weight_adj_epsilon"]=0.1 # disabled when the above is false
 
     json.dump(config,
-              open(os.path.join(DATA_PATH, "sz_taxi", "config.json"),
+              open(os.path.join(DATA_PATH, DATASET, "config.json"),
                    "w",
                    encoding="utf-8"),
               ensure_ascii=False)
@@ -273,13 +282,64 @@ def fmm2atom():
     fmm2dyna()
     gen_config()
 
+
+def notify(msg):
+    import datetime
+    channel = "J0budaR2THarZw0OqS5O"
+    notify_url = f"https://notify.run/{channel}"
+    massage = f"{msg} | {str(datetime.datetime.now())}"
+    os.system(f'curl {notify_url} -d "{massage}"')
+
+
+def convert_time(seconds):
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    print("%02d:%02d:%02d" % (h, m, s))
+
+
 if __name__ == "__main__":
-    if os.path.split(os.path.dirname(os.path.realpath(__file__)))[-1] != "data_process":
+    if os.path.split(os.path.dirname(
+            os.path.realpath(__file__)))[-1] != "data_process":
         print("Wrong working dir.")
         exit(1)
-    
-    download_osm()
-    gen_fmm_dataset()
-    run_fmm()
-    fmm2atom()
-    
+
+    if not os.path.exists(os.path.join(DATA_PATH, DATASET)):
+        os.mkdir(os.path.join(DATA_PATH, DATASET))
+
+    if not os.path.exists(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}")):
+        os.mkdir(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}"))
+
+    if not os.path.exists(
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp")):
+        start = time.time()
+        print("Downloading OSM Graph...")
+        notify("Downloading OSM Graph.")
+
+        download_osm()
+        end = time.time()
+        print("Time cost:", convert_time(end-start))
+    if not os.path.exists(
+            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "mr.txt")):
+        start = time.time()
+        print("Generating FMM Dataset...")
+        notify("Generating FMM Dataset.")
+        
+        gen_fmm_dataset()
+        end = time.time()
+        print("Time cost:", convert_time(end-start))
+    if not os.path.exists(os.path.join(DATA_PATH, DATASET, f"{DATASET}.geo")):
+        start = time.time()
+        print("Running FMM...")
+        notify("Running FMM.")
+        
+        run_fmm()
+        end = time.time()
+        print("Time cost:", convert_time(end-start))
+    if not os.path.exists(os.path.join(DATA_PATH, DATASET, "config.json")):
+        start = time.time()
+        print("Converting to atom files...")
+        notify("Converting to atom files.")
+        
+        fmm2atom()
+        end = time.time()
+        print("Time cost:", convert_time(end-start))
