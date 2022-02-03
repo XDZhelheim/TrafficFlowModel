@@ -3,19 +3,19 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import os
-from tqdm import tqdm
 import networkx as nx
 import osmnx as ox
 import json
 import time
+import argparse
 
-DATA_PATH = "../data/"
-TAXI_DATA_PATH = "../data/taxi_after_proc/clean202006"
+DATA_PATH = "../../data/"
+TAXI_DATA_PATH = "../../data/taxi_after_proc/clean202006"
 DATASET = "sz_taxi_202006"
 
-MIN_LAT = 22.5310
-MAX_LAT = 22.5397
-MIN_LNG = 114.0442
+MIN_LAT = 22.5311
+MAX_LAT = 22.5517
+MIN_LNG = 114.0439
 MAX_LNG = 114.0633
 
 START_DAY = 1
@@ -95,7 +95,7 @@ def gen_fmm_dataset():
     timedelta_traj_split = pd.Timedelta(seconds=TRAJ_SPLIT_INTERVAL)
 
     traj_counter = 0
-    for taxi_file in tqdm(sorted(os.listdir(TAXI_DATA_PATH))):
+    for taxi_file in sorted(os.listdir(TAXI_DATA_PATH)):
         date = int(taxi_file.split("_")[0].split("-")[1])
         if date < START_DAY or date > END_DAY:
             continue
@@ -212,7 +212,7 @@ def fmm2dyna():
     flow_matrix = np.zeros((5, 24 * 60 // FLOW_AGG_INTERVAL_MINUTE, N),
                            dtype=np.int16)
 
-    for traj_id in tqdm(df_fmm_res["id"].values):
+    for traj_id in df_fmm_res["id"].values:
         time_list = df_fmm_data.loc[df_fmm_data["id"] ==
                                     traj_id]["time"].values
         road_list = np.array(df_fmm_res.loc[df_fmm_res["id"] == traj_id]
@@ -297,11 +297,21 @@ def convert_time(seconds):
     print("%02d:%02d:%02d" % (h, m, s))
 
 
+def run1step(func, log_info):
+    print(log_info)
+    notify(log_info)
+    
+    start = time.time()
+    func()
+    end = time.time()
+    print("Time cost:", convert_time(end - start))
+
+
 if __name__ == "__main__":
-    if os.path.split(os.path.dirname(
-            os.path.realpath(__file__)))[-1] != "data_process":
-        print("Wrong working dir.")
-        exit(1)
+    # if os.path.split(os.path.dirname(
+    #         os.path.realpath(__file__)))[-1] != "data_process":
+    #     print("Wrong working dir.")
+    #     exit(1)
 
     if not os.path.exists(os.path.join(DATA_PATH, DATASET)):
         os.mkdir(os.path.join(DATA_PATH, DATASET))
@@ -309,39 +319,36 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}")):
         os.mkdir(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}"))
 
-    if not os.path.exists(
-            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp")):
-        start = time.time()
-        print("Downloading OSM Graph...")
-        notify("Downloading OSM Graph.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--download_osm", action="store_true")
+    parser.add_argument("--gen_fmm", action="store_true")
+    parser.add_argument("--run_fmm", action="store_true")
+    parser.add_argument("--gen_atom", action="store_true")
+    parser.add_argument("--all", action="store_true")
+    args = parser.parse_args()
 
-        download_osm()
-        end = time.time()
-        print("Time cost:", convert_time(end-start))
-    if not os.path.exists(
-            os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "mr.txt")):
-        start = time.time()
-        print("Generating FMM Dataset...")
-        notify("Generating FMM Dataset.")
-        
-        gen_fmm_dataset()
-        end = time.time()
-        print("Time cost:", convert_time(end-start))
-    if not os.path.exists(os.path.join(DATA_PATH, DATASET, f"{DATASET}.geo")):
-        start = time.time()
-        print("Running FMM...")
-        notify("Running FMM.")
-        
-        run_fmm()
-        end = time.time()
-        print("Time cost:", convert_time(end-start))
-    if not os.path.exists(os.path.join(DATA_PATH, DATASET, "config.json")):
-        start = time.time()
-        print("Converting to atom files...")
-        notify("Converting to atom files.")
-        
-        fmm2atom()
-        end = time.time()
-        print("Time cost:", convert_time(end-start))
-        
+    if args.all:
+        if not os.path.exists(
+                os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}",
+                             "edges.shp")):
+            run1step(download_osm, "Step1: Downloading OSM Graph.")
+        if not os.path.exists(
+                os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "mr.txt")):
+            run1step(gen_fmm_dataset, "Step2: Generating FMM Dataset.")
+        if not os.path.exists(
+                os.path.join(DATA_PATH, DATASET, f"{DATASET}.geo")):
+            run1step(run_fmm, "Step3: Running FMM.")
+        if not os.path.exists(os.path.join(DATA_PATH, DATASET, "config.json")):
+            run1step(fmm2atom, "Step4: Converting to atom files.")
+
+    else:
+        if args.download_osm:
+            run1step(download_osm, "Downloading OSM Graph.")
+        if args.gen_fmm:
+            run1step(gen_fmm_dataset, "Generating FMM Dataset.")
+        if args.run_fmm:
+            run1step(run_fmm, "Running FMM.")
+        if args.gen_atom:
+            run1step(fmm2atom, "Converting to atom files.")
+
     print("Done.")
