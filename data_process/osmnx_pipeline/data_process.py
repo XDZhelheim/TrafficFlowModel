@@ -343,3 +343,5 @@ if __name__ == "__main__":
         fmm2atom()
         end = time.time()
         print("Time cost:", convert_time(end-start))
+        
+    print("Done.")
