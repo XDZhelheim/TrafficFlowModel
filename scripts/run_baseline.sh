@@ -1,10 +1,15 @@
 #! /bin/bash
 
-model_list=(GRU LSTM FNN AutoEncoder \
-Seq2Seq ASTGCN MSTGCN AGCRN CONVGCN STSGCN ToGCN ResLSTM DGCN STNN \
-DCRNN STGCN GWNET MTGNN)
+# model_list=(GRU LSTM FNN AutoEncoder \
+# Seq2Seq ASTGCN MSTGCN AGCRN CONVGCN STSGCN ToGCN ResLSTM DGCN STNN \
+# DCRNN STGCN GWNET MTGNN)
+
+model_list=(GRU STSGCN GWNET)
+
+dataset=sz_taxi_202006
 
 cd ~/Bigscity-LibCity
+rm -rf libcity/cache/
 
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate torch1.7
@@ -17,31 +22,31 @@ else
 fi
 
 if [[ -z "$2" ]]; then
-    $2=100
+    epoch=100
     echo "$(tput setaf 1)Max Epoch = 100.$(tput sgr0)"
-    exit 1
 else
+    epoch=$2
     echo "$(tput setaf 6)Max Epoch = $2.$(tput sgr0)"
 fi
 
 if [[ -z "$3" ]]; then
-    $3=32
+    batch=32
     echo "$(tput setaf 1)Batch Size = 32.$(tput sgr0)"
-    exit 1
 else
+    batch=$3
     echo "$(tput setaf 6)Batch Size = $3.$(tput sgr0)"
 fi
 
-if [ ! -d "log" ]; then
-    mkdir log
+if [ ! -d "log_${dataset}" ]; then
+    mkdir log_${dataset}
 fi
 
 for model in "${model_list[@]}"; do
     start=$(date +%s)
 
     echo "$(tput setaf 6)Start ${model}.$(tput sgr0)"
-    python run_model.py --task traffic_state_pred --model ${model} --dataset sz_taxi --gpu_id $1 --max_epoch $2 --batch_size $3 > ./log/flow_${model}.log 2>&1 &
-    wait $!
+    python run_model.py --task traffic_state_pred --model ${model} --dataset ${dataset} --gpu_id $1 --max_epoch ${epoch} --batch_size ${batch} > ./log_${dataset}/flow_${model}.log 2>&1
+    # wait $!
 
     end=$(date +%s)
     time=$((end-start))

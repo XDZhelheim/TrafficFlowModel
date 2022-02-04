@@ -18,6 +18,7 @@ MAX_LAT = 22.5517
 MIN_LNG = 114.0439
 MAX_LNG = 114.0633
 
+DATE_PREFIX = "2020-06-"
 START_DAY = 1
 END_DAY = 30
 
@@ -161,12 +162,12 @@ def fmm2geo():
 def fmm2rel():
     df_edges = gpd.GeoDataFrame.from_file(
         os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}", "edges.shp"))
-    line_graph = nx.read_gpickle(
+    line_graph_drive = nx.read_gpickle(
         os.path.join(DATA_PATH, DATASET, "line_graph_drive.pkl"))
 
     df_right = df_edges[["u", "v", "key", "fid"]]
 
-    unziped_node_list = list(zip(*list(line_graph.nodes)))
+    unziped_node_list = list(zip(*list(line_graph_drive.nodes)))
     df_left = pd.DataFrame()
     df_left["u"] = unziped_node_list[0]
     df_left["v"] = unziped_node_list[1]
@@ -175,7 +176,7 @@ def fmm2rel():
 
     df_join = pd.merge(df_left, df_right, on=["u", "v", "key"])
 
-    adj = nx.convert_matrix.to_numpy_array(line_graph)
+    adj = nx.convert_matrix.to_numpy_array(line_graph_drive)
 
     rel = []
     rel_id_counter = 0
@@ -209,8 +210,9 @@ def fmm2dyna():
     dyna_file.write("dyna_id,type,time,entity_id,flow\n")
 
     assert (N != -1)
-    flow_matrix = np.zeros((5, 24 * 60 // FLOW_AGG_INTERVAL_MINUTE, N),
-                           dtype=np.int16)
+    flow_matrix = np.zeros(
+        (END_DAY - START_DAY + 1, 24 * 60 // FLOW_AGG_INTERVAL_MINUTE, N),
+        dtype=np.int16)
 
     for traj_id in df_fmm_res["id"].values:
         time_list = df_fmm_data.loc[df_fmm_data["id"] ==
@@ -226,15 +228,19 @@ def fmm2dyna():
             day = time_i.day
             mins = time_i.hour * 60 + time_i.minute
 
-            flow_matrix[day - 2][mins // 15][road_list[i]] += 1
+            flow_matrix[day -
+                        START_DAY][mins //
+                                   FLOW_AGG_INTERVAL_MINUTE][road_list[i]] += 1
 
     dyna_id_counter = 0
     for day in range(flow_matrix.shape[0]):
         for interval in range(flow_matrix.shape[1]):
             for road in range(flow_matrix.shape[2]):
-                dyna_file.write(
-                    f"{dyna_id_counter},state,2019-12-0{day+2}T{str(interval*15//60).zfill(2)}:{str((interval%4)*15).zfill(2)}:00Z,{road},{flow_matrix[day][interval][road]}\n"
-                )
+                dyna_file.write(f"{dyna_id_counter},"+
+                    "state,"+
+                    f"{DATE_PREFIX}{str(day+START_DAY).zfill(2)}T{str(interval*FLOW_AGG_INTERVAL_MINUTE//60).zfill(2)}:{str((interval%(60//FLOW_AGG_INTERVAL_MINUTE))*FLOW_AGG_INTERVAL_MINUTE).zfill(2)}:00Z,"+
+                    f"{road},"+
+                    f"{flow_matrix[day][interval][road]}\n")
                 dyna_id_counter += 1
 
     dyna_file.close()
@@ -300,11 +306,12 @@ def convert_time(seconds):
 def run1step(func, log_info):
     print(log_info)
     notify(log_info)
-    
+
     start = time.time()
     func()
     end = time.time()
     print("Time cost:", convert_time(end - start))
+    notify("Finish " + log_info)
 
 
 if __name__ == "__main__":
@@ -325,7 +332,12 @@ if __name__ == "__main__":
     parser.add_argument("--run_fmm", action="store_true")
     parser.add_argument("--gen_atom", action="store_true")
     parser.add_argument("--all", action="store_true")
+
+    parser.add_argument("-N", type=int, required=False)
     args = parser.parse_args()
+
+    if args.N:
+        N = args.N
 
     if args.all:
         if not os.path.exists(
