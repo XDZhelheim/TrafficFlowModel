@@ -1,7 +1,7 @@
 #! /bin/bash
 
 model_list=(GRU LSTM FNN AutoEncoder \
-Seq2Seq ASTGCN MSTGCN AGCRN CONVGCN STSGCN ToGCN ResLSTM DGCN STNN \
+Seq2Seq ASTGCN MSTGCN AGCRN STSGCN ToGCN ResLSTM DGCN STNN \
 DCRNN STGCN GWNET MTGNN)
 
 # model_list=(GRU STSGCN GWNET)
@@ -45,7 +45,7 @@ for model in "${model_list[@]}"; do
     start=$(date +%s)
 
     echo "$(tput setaf 6)Start ${model}.$(tput sgr0)"
-    python run_model.py --task traffic_state_pred --model ${model} --dataset ${dataset} --gpu_id $1 --max_epoch ${epoch} --batch_size ${batch} > ./log_${dataset}/flow_${model}.log 2>&1
+    python run_model.py --task traffic_state_pred --model ${model} --dataset ${dataset} --config_file ${dataset} --gpu_id $1 --max_epoch ${epoch} --batch_size ${batch} > ./log_${dataset}/flow_${model}.log 2>&1
     # wait $!
 
     end=$(date +%s)
@@ -53,3 +53,5 @@ for model in "${model_list[@]}"; do
 
     echo "$(tput setaf 2)Finished ${model}, duration ${time}s.$(tput sgr0)"
 done
+
+# nohup scripts/run_baseline.sh 5 1000 32 > scripts/baseline.log 2>&1 &

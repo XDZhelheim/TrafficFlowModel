@@ -1,4 +1,3 @@
-from tracemalloc import start
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -24,7 +23,7 @@ END_DAY = 30
 
 DOWNSAMPLING_INTERVAL = 30
 TRAJ_SPLIT_INTERVAL = 600
-FLOW_AGG_INTERVAL_MINUTE = 15
+FLOW_AGG_INTERVAL_MINUTE = 5
 
 N = -1  # num of roads
 
@@ -206,7 +205,9 @@ def fmm2dyna():
                               sep=";",
                               parse_dates=["time"])
 
-    dyna_file = open(os.path.join(DATA_PATH, DATASET, f"{DATASET}.dyna"), "w")
+    dyna_file = open(
+        os.path.join(DATA_PATH, DATASET,
+                     f"{DATASET}_{FLOW_AGG_INTERVAL_MINUTE}min.dyna"), "w")
     dyna_file.write("dyna_id,type,time,entity_id,flow\n")
 
     assert (N != -1)
@@ -236,14 +237,128 @@ def fmm2dyna():
     for day in range(flow_matrix.shape[0]):
         for interval in range(flow_matrix.shape[1]):
             for road in range(flow_matrix.shape[2]):
-                dyna_file.write(f"{dyna_id_counter},"+
-                    "state,"+
-                    f"{DATE_PREFIX}{str(day+START_DAY).zfill(2)}T{str(interval*FLOW_AGG_INTERVAL_MINUTE//60).zfill(2)}:{str((interval%(60//FLOW_AGG_INTERVAL_MINUTE))*FLOW_AGG_INTERVAL_MINUTE).zfill(2)}:00Z,"+
-                    f"{road},"+
-                    f"{flow_matrix[day][interval][road]}\n")
+                dyna_file.write(
+                    f"{dyna_id_counter}," + "state," +
+                    f"{DATE_PREFIX}{str(day+START_DAY).zfill(2)}T{str(interval*FLOW_AGG_INTERVAL_MINUTE//60).zfill(2)}:{str((interval%(60//FLOW_AGG_INTERVAL_MINUTE))*FLOW_AGG_INTERVAL_MINUTE).zfill(2)}:00Z,"
+                    + f"{road}," + f"{flow_matrix[day][interval][road]}\n")
                 dyna_id_counter += 1
 
     dyna_file.close()
+
+    np.save(
+        os.path.join(DATA_PATH, DATASET,
+                     f"{DATASET}_{FLOW_AGG_INTERVAL_MINUTE}min.npy"),
+        flow_matrix)
+
+
+def gen_time_seq(start_time, end_time, length):
+    assert (end_time > start_time)
+
+    start_time = start_time.view(np.int64)
+    end_time = end_time.view(np.int64)
+
+    seq = []
+    step = (end_time - start_time) // (length + 1)
+    for i in range(length):
+        seq.append(start_time + step * (i + 1))
+
+    return list(np.array(seq, dtype="datetime64[ns]"))
+
+
+def convert_path(row):
+    row["opath"] = np.array(row["opath"].split(","), dtype=np.int16)
+    row["cpath"] = np.array(row["cpath"].split(","), dtype=np.int16)
+
+    return row
+
+
+def fmm2dyna_recovery():
+    df_fmm_res = pd.read_csv(os.path.join(DATA_PATH, DATASET, f"fmm_{DATASET}",
+                                          "mr.txt"),
+                             sep=";").set_index("id").dropna()
+    df_fmm_res = df_fmm_res.apply(convert_path, axis=1)
+    df_fmm_data = pd.read_csv(os.path.join(DATA_PATH, DATASET,
+                                           f"fmm_{DATASET}", "gps.csv"),
+                              sep=";",
+                              parse_dates=["time"])
+
+    dyna_file = open(
+        os.path.join(
+            DATA_PATH, DATASET,
+            f"{DATASET}_{FLOW_AGG_INTERVAL_MINUTE}min_recovered.dyna"), "w")
+    dyna_file.write(
+        "dyna_id,type,time,entity_id,flow\n")
+
+    flow_matrix = np.zeros(
+        (END_DAY - START_DAY + 1, 24 * 60 // FLOW_AGG_INTERVAL_MINUTE, N),
+        dtype=np.int16)
+
+    for traj_id in df_fmm_res.index:
+        time_list = df_fmm_data.loc[df_fmm_data["id"] ==
+                                    traj_id]["time"].values
+        opath_list = df_fmm_res.loc[traj_id, "opath"]
+        cpath_list = df_fmm_res.loc[traj_id, "cpath"]
+
+        # drop duplicates
+        del_indexes = []
+        for i in range(len(time_list) - 1):
+            if opath_list[i] == opath_list[i + 1]:
+                del_indexes.append(i + 1)
+
+        opath_list = np.delete(opath_list, del_indexes)
+        time_list = np.delete(time_list, del_indexes)
+
+        assert (len(opath_list) == len(time_list))
+        assert (opath_list[-1] == cpath_list[-1])
+
+        # generate recovered time
+        i = 0
+        j = 0
+        recovered_time_list = []
+
+        while True:
+            if i > len(opath_list) - 1:
+                break
+            if opath_list[i] == cpath_list[j]:
+                recovered_time_list.append(time_list[i])
+                i += 1
+                j += 1
+            else:
+                length = 0
+                while opath_list[i] != cpath_list[j]:
+                    j += 1
+                    length += 1
+                recovered_time_list.extend(
+                    gen_time_seq(time_list[i - 1], time_list[i], length))
+        cpath_list = cpath_list[:j] # fmm bug: trailing
+        assert (len(recovered_time_list) == len(cpath_list))
+
+        for i in range(len(cpath_list)):
+            time_i = pd.to_datetime(recovered_time_list[i])
+            day = time_i.day
+            mins = time_i.hour * 60 + time_i.minute
+
+            flow_matrix[day - START_DAY][mins // FLOW_AGG_INTERVAL_MINUTE][
+                cpath_list[i]] += 1
+
+    dyna_id_counter = 0
+    for day in range(flow_matrix.shape[0]):
+        if day == 18 or day == 19:
+            continue
+        for interval in range(flow_matrix.shape[1]):
+            for road in range(flow_matrix.shape[2]):
+                dyna_file.write(
+                    f"{dyna_id_counter}," + "state," +
+                    f"{DATE_PREFIX}{str(day+START_DAY).zfill(2)}T{str(interval*FLOW_AGG_INTERVAL_MINUTE//60).zfill(2)}:{str((interval%(60//FLOW_AGG_INTERVAL_MINUTE))*FLOW_AGG_INTERVAL_MINUTE).zfill(2)}:00Z,"
+                    + f"{road}," + f"{flow_matrix[day][interval][road]}\n")
+                dyna_id_counter += 1
+
+    dyna_file.close()
+
+    np.save(
+        os.path.join(DATA_PATH, DATASET,
+                     f"{DATASET}_{FLOW_AGG_INTERVAL_MINUTE}min_recovered.npy"),
+        flow_matrix)
 
 
 def gen_config():
@@ -262,7 +377,8 @@ def gen_config():
     config["dyna"]["state"] = {"entity_id": "geo_id", "flow": "num"}
 
     config["info"] = {}
-    config["info"]["data_files"] = DATASET
+    config["info"][
+        "data_files"] = f"{DATASET}_{FLOW_AGG_INTERVAL_MINUTE}min_recovered"
     config["info"]["geo_file"] = DATASET
     config["info"]["rel_file"] = DATASET
     config["info"]["data_col"] = ["flow"]
