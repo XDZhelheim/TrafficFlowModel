@@ -6,10 +6,10 @@ DCRNN STGCN GWNET MTGNN)
 
 # model_list=(GRU STSGCN GWNET)
 
-dataset=sz_taxi_202006
+dataset=sz_taxi_202006_speed
 
 cd ~/Bigscity-LibCity
-rm -rf libcity/cache/
+# rm -rf libcity/cache/
 
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate torch1.7
@@ -45,7 +45,7 @@ for model in "${model_list[@]}"; do
     start=$(date +%s)
 
     echo "$(tput setaf 6)Start ${model}.$(tput sgr0)"
-    python run_model.py --task traffic_state_pred --model ${model} --dataset ${dataset} --config_file ${dataset} --gpu_id $1 --max_epoch ${epoch} --batch_size ${batch} > ./log_${dataset}/flow_${model}.log 2>&1
+    python run_model.py --task traffic_state_pred --model ${model} --dataset ${dataset} --gpu_id $1 --max_epoch ${epoch} --batch_size ${batch} > ./log_${dataset}/flow_${model}.log 2>&1
     # wait $!
 
     end=$(date +%s)
@@ -53,5 +53,7 @@ for model in "${model_list[@]}"; do
 
     echo "$(tput setaf 2)Finished ${model}, duration ${time}s.$(tput sgr0)"
 done
+
+echo 'Finished.'
 
 # nohup scripts/run_baseline.sh 5 1000 32 > scripts/baseline.log 2>&1 &
