@@ -1,5 +1,10 @@
 # TrafficFlowModel
 
+**TODO**
+1. 调参：GPS 筛选的边界范围, trajectory split interval
+2. 设阈值 < n 则清零
+3. 原数据中 GPS 在变但是速度一直=0的异常值要不要算进 flow
+
 **Data Processing Pipeline** [data_process/data_process.py](./data_process/data_process.py)
 
 1. [data_process/gen_road_network_small.ipynb](./data_process/gen_road_network_small.ipynb)
