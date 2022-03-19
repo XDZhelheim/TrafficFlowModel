@@ -1,12 +1,12 @@
 #! /bin/bash
 
 model_list=(GRU LSTM FNN AutoEncoder \
-Seq2Seq ASTGCN MSTGCN AGCRN STSGCN ToGCN ResLSTM DGCN STNN \
+Seq2Seq ASTGCN MSTGCN AGCRN STSGCN ToGCN \
 DCRNN STGCN GWNET MTGNN)
 
 # model_list=(GRU STSGCN GWNET)
 
-dataset=sz_taxi_202006_speed
+dataset=sz_taxi_202006
 
 cd ~/Bigscity-LibCity
 # rm -rf libcity/cache/
