@@ -16,6 +16,9 @@ DATA_PATH="../data/sz_taxi_202006/"
 SEQ_LEN=5
 NUM_ROADS=492
 
+GPU_ID=6
+DEVICE=torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
+
 def gen_xy(traj_list, seq_len):
     """
     Generate inputs and targets for traj next-hop prediction.
@@ -99,9 +102,8 @@ def eval_model(model, valset_loader, criterion, gpu=True):
     batch_loss_list=[]
     batch_acc_list=[]
     for x_batch, y_batch in valset_loader:
-        if gpu and torch.cuda.is_available():
-            x_batch = x_batch.cuda()
-            y_batch = y_batch.cuda()
+        x_batch = x_batch.to(DEVICE)
+        y_batch = y_batch.to(DEVICE)
 
         out_batch = model.forward(x_batch)
         loss = criterion.forward(out_batch, y_batch)
@@ -118,9 +120,8 @@ def train_one_epoch(model, trainset_loader, optimizer, criterion, gpu=True):
     batch_loss_list=[]
     batch_acc_list=[]
     for x_batch, y_batch in trainset_loader:
-        if gpu and torch.cuda.is_available():
-            x_batch = x_batch.cuda()
-            y_batch = y_batch.cuda()
+        x_batch = x_batch.to(DEVICE)
+        y_batch = y_batch.to(DEVICE)
 
         out_batch = model.forward(x_batch)
         loss = criterion.forward(out_batch, y_batch)
@@ -271,7 +272,7 @@ if __name__ == "__main__":
                     log_file=f"./log/ed{embed_dim}_hd{hidden_dim}_bs{batch_size}_lr{lr}.log"
                     
                     train_loader, val_loader, test_loader=get_dataloaders(traj_list_all, SEQ_LEN, batch_size=batch_size)
-                    model=DontKnowWhat2EatNN(embed_dim=embed_dim, hidden_dim=hidden_dim, net_type="lstm").cuda()
+                    model=DontKnowWhat2EatNN(embed_dim=embed_dim, hidden_dim=hidden_dim, net_type="lstm").to(DEVICE)
                     criterion=torch.nn.CrossEntropyLoss()
                     optimizer=torch.optim.Adam(model.parameters(), lr=lr)
                     train(model, train_loader, val_loader, optimizer, criterion, max_epochs=1000, early_stop=10, verbose=1, plot=False, gpu=True, log=log_file)
