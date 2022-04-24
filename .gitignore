@@ -133,3 +133,4 @@ temp*
 saved_model/
 
 .DS_Store
+log/

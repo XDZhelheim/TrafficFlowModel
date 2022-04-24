@@ -16,7 +16,6 @@ NUM_ROADS = 492
 
 GPU_ID = 6
 DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
-print(DEVICE)
 
 
 def gen_xy(traj_list, seq_len):
