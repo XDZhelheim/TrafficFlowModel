@@ -189,8 +189,8 @@ def train(
                 epoch + 1,
                 "\tTrain Loss = %.5f" % train_loss,
                 "Train acc = %.5f " % train_acc,
-                "Eval Loss = %.5f" % val_loss,
-                "Eval acc = %.5f " % val_acc,
+                "Val Loss = %.5f" % val_loss,
+                "Val acc = %.5f " % val_acc,
             )
 
             if log:
@@ -200,8 +200,8 @@ def train(
                     epoch + 1,
                     "\tTrain Loss = %.5f" % train_loss,
                     "Train acc = %.5f " % train_acc,
-                    "Eval Loss = %.5f" % val_loss,
-                    "Eval acc = %.5f " % val_acc,
+                    "Val Loss = %.5f" % val_loss,
+                    "Val acc = %.5f " % val_acc,
                     file=log,
                 )
                 log.flush()
@@ -262,9 +262,18 @@ def train(
 
 
 class DontKnowWhat2EatNN(torch.nn.Module):
-    def __init__(self, embed_dim=16, hidden_dim=64, dropout=0.0, net_type="lstm"):
+    def __init__(
+        self,
+        embed_dim=16,
+        hidden_dim=64,
+        dropout=0.0,
+        net_type="lstm",
+        num_layers=1,
+        use_all_h=False,
+    ):
         super(DontKnowWhat2EatNN, self).__init__()
         self.net_type = net_type
+        self.use_all_h = use_all_h
 
         self.embedding = torch.nn.Embedding(
             NUM_ROADS, embed_dim, padding_idx=-1
@@ -274,7 +283,7 @@ class DontKnowWhat2EatNN(torch.nn.Module):
             self.rnn = torch.nn.LSTM(
                 input_size=embed_dim,
                 hidden_size=hidden_dim,
-                num_layers=1,
+                num_layers=num_layers,
                 batch_first=True,
                 dropout=dropout,
             )
@@ -282,9 +291,18 @@ class DontKnowWhat2EatNN(torch.nn.Module):
             self.rnn = torch.nn.GRU(
                 input_size=embed_dim,
                 hidden_size=hidden_dim,
-                num_layers=1,
+                num_layers=num_layers,
                 batch_first=True,
                 dropout=dropout,
+            )
+        elif net_type.lower() == "vanilla":
+            self.rnn = torch.nn.RNN(
+                input_size=embed_dim,
+                hidden_size=hidden_dim,
+                num_layers=num_layers,
+                batch_first=True,
+                dropout=dropout,
+                nonlinearity="relu",
             )
         elif net_type.lower() == "attn":
             self.rnn = torch.nn.MultiheadAttention(
@@ -294,7 +312,6 @@ class DontKnowWhat2EatNN(torch.nn.Module):
             print("Invalid type.")
             sys.exit(1)
 
-        self.relu = torch.nn.ReLU(inplace=True)
         self.fc = torch.nn.Linear(in_features=hidden_dim, out_features=NUM_ROADS)
         self.softmax = torch.nn.Softmax(dim=1)
 
@@ -306,10 +323,18 @@ class DontKnowWhat2EatNN(torch.nn.Module):
             out, _ = self.rnn(out, out, out)  # (batch_size, seq_len, hidden_dim)
         else:
             out, _ = self.rnn(out)  # (batch_size, seq_len, hidden_dim)
-        out = out[:, -1, :]  # (batch_size, hidden_dim) get last step's output
 
-        out = self.fc(out)  # (batch_size, num_roads)
-        out = self.relu(out)  # (batch_size, num_roads)
+        if self.use_all_h:
+            out = out.contiguous().view(
+                -1, out.shape[2]
+            )  # (batch_size*seq_len, hidden_dim) use all step's output
+            out = self.fc(out)  # (batch_size*seq_len, num_roads)
+            out = out.view(-1, SEQ_LEN, NUM_ROADS)  # (batch_size, seq_len, num_roads)
+            out = out[:, -1, :]  # (batch_size, num_roads)
+        else:
+            out = out[:, -1, :]  # (batch_size, hidden_dim) use last step's output
+            out = self.fc(out)  # (batch_size, num_roads)
+
         out = self.softmax(out)  # (batch_size, num_roads) probabilities
 
         return out
@@ -325,37 +350,43 @@ if __name__ == "__main__":
         allow_pickle=True,
     )
 
+    net_type_list = ["gru", "lstm"]
     embed_dim_list = [16, 32, 64, 128]
-    hidden_dim_list = [32, 64, 128]
+    hidden_dim_list = [32, 64, 128, 256]
     batch_size_list = [64, 128, 256, 512]
     lr_list = [1e-4, 1e-3]
 
-    for embed_dim in embed_dim_list:
-        for hidden_dim in hidden_dim_list:
-            for batch_size in batch_size_list:
-                for lr in lr_list:
-                    log_file = (
-                        f"./log/ed{embed_dim}_hd{hidden_dim}_bs{batch_size}_lr{lr}.log"
-                    )
+    for net_type in net_type_list:
+        for embed_dim in embed_dim_list:
+            for hidden_dim in hidden_dim_list:
+                if hidden_dim <= embed_dim:
+                    continue
+                for batch_size in batch_size_list:
+                    for lr in lr_list:
+                        log_file = f"./log/{net_type}_ed{embed_dim}_hd{hidden_dim}_bs{batch_size}_lr{lr}.log"
 
-                    train_loader, val_loader, test_loader = get_dataloaders(
-                        traj_list_all, SEQ_LEN, batch_size=batch_size
-                    )
-                    model = DontKnowWhat2EatNN(
-                        embed_dim=embed_dim, hidden_dim=hidden_dim, net_type="lstm"
-                    ).to(DEVICE)
-                    criterion = torch.nn.CrossEntropyLoss()
-                    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-                    train(
-                        model,
-                        train_loader,
-                        val_loader,
-                        optimizer,
-                        criterion,
-                        max_epochs=1000,
-                        early_stop=10,
-                        verbose=1,
-                        plot=False,
-                        log=log_file,
-                    )
+                        train_loader, val_loader, test_loader = get_dataloaders(
+                            traj_list_all, SEQ_LEN, batch_size=batch_size
+                        )
+                        model = DontKnowWhat2EatNN(
+                            embed_dim=embed_dim,
+                            hidden_dim=hidden_dim,
+                            net_type=net_type,
+                            num_layers=1,
+                            use_all_h=False,
+                        ).to(DEVICE)
+                        criterion = torch.nn.CrossEntropyLoss()
+                        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                        train(
+                            model,
+                            train_loader,
+                            val_loader,
+                            optimizer,
+                            criterion,
+                            max_epochs=1000,
+                            early_stop=10,
+                            verbose=1,
+                            plot=False,
+                            log=log_file,
+                        )
 
