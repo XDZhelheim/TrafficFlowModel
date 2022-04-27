@@ -134,3 +134,6 @@ saved_model/
 
 .DS_Store
 log/
+saved/
+saved1/
+nohup.out

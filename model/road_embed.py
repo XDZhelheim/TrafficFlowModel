@@ -5,10 +5,7 @@ import matplotlib.pyplot as plt
 import torch
 import datetime
 import sys
-from IPython.core.interactiveshell import InteractiveShell
-
-# sys.path.append("..")
-InteractiveShell.ast_node_interactivity = "all"
+import argparse
 
 DATA_PATH = "../data/sz_taxi_202006/"
 SEQ_LEN = 5
@@ -210,6 +207,7 @@ def train(
             wait = 0
             min_val_loss = val_loss
             best_epoch = epoch
+            best_state_dict = model.state_dict()
         else:
             wait += 1
             if wait >= early_stop:
@@ -260,6 +258,10 @@ def train(
     if log:
         log.close()
 
+    torch.save(best_state_dict, "./saved/best_state_dict.pkl")
+    model.load_state_dict(best_state_dict)
+    return model
+
 
 class DontKnowWhat2EatNN(torch.nn.Module):
     def __init__(
@@ -270,10 +272,12 @@ class DontKnowWhat2EatNN(torch.nn.Module):
         net_type="lstm",
         num_layers=1,
         use_all_h=False,
+        bidirectional=False,
     ):
         super(DontKnowWhat2EatNN, self).__init__()
         self.net_type = net_type
         self.use_all_h = use_all_h
+        self.D = 2 if bidirectional else 1
 
         self.embedding = torch.nn.Embedding(
             NUM_ROADS, embed_dim, padding_idx=-1
@@ -286,7 +290,9 @@ class DontKnowWhat2EatNN(torch.nn.Module):
                 num_layers=num_layers,
                 batch_first=True,
                 dropout=dropout,
+                bidirectional=bidirectional,
             )
+            self.reset_lstm_params()
         elif net_type.lower() == "gru":
             self.rnn = torch.nn.GRU(
                 input_size=embed_dim,
@@ -294,6 +300,7 @@ class DontKnowWhat2EatNN(torch.nn.Module):
                 num_layers=num_layers,
                 batch_first=True,
                 dropout=dropout,
+                bidirectional=bidirectional,
             )
         elif net_type.lower() == "vanilla":
             self.rnn = torch.nn.RNN(
@@ -303,6 +310,7 @@ class DontKnowWhat2EatNN(torch.nn.Module):
                 batch_first=True,
                 dropout=dropout,
                 nonlinearity="relu",
+                bidirectional=bidirectional,
             )
         elif net_type.lower() == "attn":
             self.rnn = torch.nn.MultiheadAttention(
@@ -312,8 +320,24 @@ class DontKnowWhat2EatNN(torch.nn.Module):
             print("Invalid type.")
             sys.exit(1)
 
-        self.fc = torch.nn.Linear(in_features=hidden_dim, out_features=NUM_ROADS)
+        self.fc = torch.nn.Linear(
+            in_features=hidden_dim * self.D, out_features=NUM_ROADS
+        )
         self.softmax = torch.nn.Softmax(dim=1)
+
+    def reset_lstm_params(self):
+        for name, p in self.rnn.named_parameters():
+            if "weight_ih" in name:
+                torch.nn.init.xavier_uniform_(p.data)
+            elif "weight_hh" in name:
+                torch.nn.init.orthogonal_(p.data)
+            elif "bias_ih" in name:
+                p.data.fill_(0)
+                # Set forget-gate bias to 1
+                n = p.size(0)
+                p.data[(n // 4) : (n // 2)].fill_(1)
+            elif "bias_hh" in name:
+                p.data.fill_(0)
 
     def forward(self, x):
         # x: (batch_size, seq_len)
@@ -340,23 +364,56 @@ class DontKnowWhat2EatNN(torch.nn.Module):
         return out
 
     def get_embed_matrix(self):
-        return self.embedding.weight.cpu().numpy()
+        return self.embedding.weight.cpu().detach().numpy()  # N * D
 
 
-if __name__ == "__main__":
+def tune():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", type=str, required=True)
+    parser.add_argument("-v", type=int, required=True)
+    args = parser.parse_args()
+
     p = 0.05
     traj_list_all = np.load(
         f"../data/sz_taxi_202006/sz_taxi_202006_traj_list_bin_24_sampled_{p}_flatten_id.npy",
         allow_pickle=True,
     )
 
-    net_type_list = ["gru", "lstm"]
-    embed_dim_list = [16, 32, 64, 128]
-    hidden_dim_list = [32, 64, 128, 256]
-    batch_size_list = [64, 128, 256, 512]
-    lr_list = [1e-4, 1e-3]
+    # net_type_list = ["gru", "lstm"]
+    # embed_dim_list = [16, 32, 64, 128]
+    # hidden_dim_list = [32, 64, 128, 256]
+    # batch_size_list = [64, 128, 256, 512]
+    # lr_list = [1e-4, 1e-3]
+
+    if args.t.lower() == "gru":
+        net_type_list = ["gru"]
+        batch_size_list = [64, 128, 256, 512]
+        lr_list = [1e-4, 1e-3]
+        if args.v == 1:
+            embed_dim_list = [32, 64]
+            hidden_dim_list = [128, 256]
+        elif args.v == 2:
+            embed_dim_list = [128]
+            hidden_dim_list = [128, 256]
+    elif args.t.lower() == "lstm":
+        net_type_list = ["lstm"]
+        batch_size_list = [64, 128, 256, 512]
+        lr_list = [1e-4, 1e-3]
+        if args.v == 1:
+            embed_dim_list = [16]
+            hidden_dim_list = [32, 64, 128, 256]
+        if args.v == 2:
+            embed_dim_list = [32]
+            hidden_dim_list = [64, 128, 256]
+        if args.v == 3:
+            embed_dim_list = [64, 128]
+            hidden_dim_list = [128, 256]
 
     for net_type in net_type_list:
+        if net_type == "lstm":
+            bi = True
+        else:
+            bi = False
         for embed_dim in embed_dim_list:
             for hidden_dim in hidden_dim_list:
                 if hidden_dim <= embed_dim:
@@ -374,6 +431,7 @@ if __name__ == "__main__":
                             net_type=net_type,
                             num_layers=1,
                             use_all_h=False,
+                            bidirectional=bi,
                         ).to(DEVICE)
                         criterion = torch.nn.CrossEntropyLoss()
                         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -390,3 +448,52 @@ if __name__ == "__main__":
                             log=log_file,
                         )
 
+
+if __name__ == "__main__":
+    net_type = "lstm"
+    embed_dim = 128
+    hidden_dim = 256
+    batch_size = 256
+    lr = 1e-4
+    bi = True
+
+    p = 0.8
+    traj_list_all = np.load(
+        f"../data/sz_taxi_202006/sz_taxi_202006_traj_list_bin_24_sampled_{p}_flatten_id.npy",
+        allow_pickle=True,
+    )
+
+    log_file = "train.log"
+
+    train_loader, val_loader, test_loader = get_dataloaders(
+        traj_list_all, SEQ_LEN, batch_size=batch_size
+    )
+    model = DontKnowWhat2EatNN(
+        embed_dim=embed_dim,
+        hidden_dim=hidden_dim,
+        net_type=net_type,
+        num_layers=1,
+        use_all_h=False,
+        bidirectional=bi,
+    ).to(DEVICE)
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model = train(
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        criterion,
+        max_epochs=3,
+        early_stop=10,
+        verbose=1,
+        plot=False,
+        log=log_file,
+    )
+
+    test_loss, test_acc = eval_model(model, test_loader, criterion)
+    with open(log_file, "a") as f:
+        print("Test Loss = %.5f" % test_loss, "Test acc = %.5f " % test_acc, file=f)
+    
+    embedding_matrix=model.get_embed_matrix()
+    np.save("./saved/embedding_matrix.npy", embedding_matrix, allow_pickle=True)
