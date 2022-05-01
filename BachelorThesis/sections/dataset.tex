@@ -16,7 +16,7 @@ Our data is taken from the records of GPS devices on the taxis in Shenzhen. A br
       \item Speed
       \item Timestamp
     \end{itemize}
-  \item \textbf{Size:} Over 2,700,000,000 rows
+  \item \textbf{Size:} Over 2,500,000,000 rows
 \end{itemize}
 
 A small part of data is shown as an example in figure \ref{fig: raw_data}.
@@ -33,6 +33,37 @@ Unlike the open datasets that can be applied to deep learning models without the
 Data cleaning is the process of detecting and correcting (or removing) corrupt or inaccurate records from a record set, table, or database and refers to identifying incomplete, incorrect, inaccurate or irrelevant parts of the data and then replacing, modifying, or deleting the dirty or coarse data\cite{data_cleaning}. There are many kinds of bad records that should be deleted or modified. To summarize, we categorize them as the following classes.
 
 \begin{enumerate}
-  \item \textbf{Duplicate Rows}. A considerable large part of the raw data are duplicate. The reason is when a GPS device is transmitting data to server, it will send several copies in order to avoid packet loss under poor Internet connection. As a result, they are completely same rows, and thus can be removed safely, leaving only the foremost one.
-  \item \textbf{Corrupted Timestamp}.
+  \item \textbf{Duplicate Rows.} A considerable large part of the raw data are duplicate. The reason is when a GPS device is transmitting data to server, it will send several copies in order to avoid packet loss under poor Internet connection. As a result, they are completely same rows, and thus can be removed safely, leaving only the foremost one.
+  \item \textbf{Corrupted Timestamp.} This is a sort of abnormal record. Since our time range is June 2020, all the timestamps that not in here should be deleted. In detail, there are two kinds of them: 1) records in May $31^{st}$ or July $1^{st}$. This is caused by the equipments' lack of accuracy. 2) 2000-01-01. And this is caused by data loss, thus, it is filled by a default value.
+  \item \textbf{Abnormal Location.} The latitude and longitude of some records are zero, which is resulted by the data loss during transmission. These dirty values should be deleted.
+  \item \textbf{Zero Speed.} Stationary taxis are still transmitting their location information to the server if the GPS device is on, leading to a big portion of zero speed records. They are useless owing to that trajectories are a series of moving locations. Therefore, under normal circumstances, it is better to remove them. However, things are not that happy in our data. There are four kinds of zero speed records relating to the change of location, i.e. latitude and longitude, and they should be treated differently. Details are provided in the next subsection.
+  \item \textbf{Irrelevant Attributes.} As shown in figure \ref{fig: raw_data} above, the raw data consists of several columns. The information that have no contribution to trajectories needs to be removed, leaving only latitude, longitude, speed and timestamp.
 \end{enumerate}
+
+We take the data of June $1^{st}$ as a case study to give an illustration of our data cleaning procedure. In total, there are 97,453,725 rows.
+
+\begin{table}[htb]
+  \begin{center}
+      \caption{Data Cleaning Procedure on June $1^{st}$}
+      \label{data_cleaning_table}
+      \begin{tabular}{ccc}
+          \toprule
+
+          \textbf{Action} & \textbf{Deleted Percentage} & \textbf{\#Remaining Rows}\\
+
+          \midrule
+
+          Drop duplicate & $51.73\%$ & 47,042,104\\
+          Drop abnormal values & $1.19\%$ & 45,874,548\\
+          Drop zero speed & $16.84\%$ & 29,458,603\\
+
+          \cmidrule{1-2}
+
+          \textbf{Remaining Percentage} & $30.22\%$ & ~\\
+
+          \bottomrule
+      \end{tabular}
+  \end{center}
+\end{table}
+
+\subsection{Data Processing}
