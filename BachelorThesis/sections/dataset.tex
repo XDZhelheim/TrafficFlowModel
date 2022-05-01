@@ -15,6 +15,7 @@ Our data is taken from the records of GPS devices on the taxis in Shenzhen. A br
       \item Longitude and latitude
       \item Speed
       \item Timestamp
+      \item $\cdots$
     \end{itemize}
   \item \textbf{Size:} Over 2,500,000,000 rows
 \end{itemize}
@@ -35,21 +36,21 @@ Data cleaning is the process of detecting and correcting (or removing) corrupt o
 \begin{enumerate}
   \item \textbf{Duplicate Rows.} A considerable large part of the raw data are duplicate. The reason is when a GPS device is transmitting data to server, it will send several copies in order to avoid packet loss under poor Internet connection. As a result, they are completely same rows, and thus can be removed safely, leaving only the foremost one.
   \item \textbf{Corrupted Timestamp.} This is a sort of abnormal record. Since our time range is June 2020, all the timestamps that not in here should be deleted. In detail, there are two kinds of them: 1) records in May $31^{st}$ or July $1^{st}$. This is caused by the equipments' lack of accuracy. 2) 2000-01-01. And this is caused by data loss, thus, it is filled by a default value.
-  \item \textbf{Abnormal Location.} The latitude and longitude of some records are zero, which is resulted by the data loss during transmission. These dirty values should be deleted.
+  \item \textbf{Missing Location.} The latitude and longitude of some records are zero, which is resulted by the data loss during transmission. These dirty values should be deleted.
   \item \textbf{Zero Speed.} Stationary taxis are still transmitting their location information to the server if the GPS device is on, leading to a big portion of zero speed records. They are useless owing to that trajectories are a series of moving locations. Therefore, under normal circumstances, it is better to remove them. However, things are not that happy in our data. There are four kinds of zero speed records relating to the change of location, i.e. latitude and longitude, and they should be treated differently. Details are provided in the next subsection.
   \item \textbf{Irrelevant Attributes.} As shown in figure \ref{fig: raw_data} above, the raw data consists of several columns. The information that have no contribution to trajectories needs to be removed, leaving only latitude, longitude, speed and timestamp.
 \end{enumerate}
 
-We take the data of June $1^{st}$ as a case study to give an illustration of our data cleaning procedure. In total, there are 97,453,725 rows.
+We take the data of June $1^{st}$ as a case study to give an illustration of our data cleaning procedure and hope to reflect the property of the whole GPS data. In total, there are 97,453,725 rows. Table \ref{data_cleaning_table} gives the deleted percentage and remaining rows after each data cleaning step.
 
 \begin{table}[htb]
   \begin{center}
-      \caption{Data Cleaning Procedure on June $1^{st}$}
+      \caption{Data Cleaning Example on June $1^{st}$}
       \label{data_cleaning_table}
       \begin{tabular}{ccc}
           \toprule
 
-          \textbf{Action} & \textbf{Deleted Percentage} & \textbf{\#Remaining Rows}\\
+          \textbf{Step} & \textbf{Deleted Percentage} & \textbf{\#Remaining Rows}\\
 
           \midrule
 
@@ -65,5 +66,7 @@ We take the data of June $1^{st}$ as a case study to give an illustration of our
       \end{tabular}
   \end{center}
 \end{table}
+
+As shown in the table, half of the records are duplicated. Fortunately the total number of records are large enough to endure the data cleaning procedure. For the $17\%$ zero speed records, the following figure points out the huge impact of removal on the distribution of speed.
 
 \subsection{Data Processing}
