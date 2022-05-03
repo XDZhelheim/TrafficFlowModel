@@ -1,3 +1,5 @@
+# @deprecated
+
 #! /bin/bash
 
 model_list=(GRU LSTM FNN AutoEncoder \

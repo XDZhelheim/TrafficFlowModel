@@ -11,7 +11,7 @@ DATA_PATH = "../data/sz_taxi_202006/"
 SEQ_LEN = 5
 NUM_ROADS = 492
 
-GPU_ID = 6
+GPU_ID = 2
 DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
 
 
@@ -451,7 +451,7 @@ def tune():
 
 if __name__ == "__main__":
     net_type = "lstm"
-    embed_dim = 128
+    embed_dim = 64
     hidden_dim = 256
     batch_size = 256
     lr = 1e-4
@@ -484,7 +484,7 @@ if __name__ == "__main__":
         val_loader,
         optimizer,
         criterion,
-        max_epochs=3,
+        max_epochs=1000,
         early_stop=10,
         verbose=1,
         plot=False,
