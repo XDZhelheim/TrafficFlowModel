@@ -24,7 +24,7 @@ A small part of data is shown as an example in figure \ref{fig: raw_data}.
 \begin{figure}[htb]
     \centering
     \includegraphics[width=\textwidth]{images/raw_data.png}
-    \caption{Shenzhen taxi GPS raw data}
+    \caption{A glance at Shenzhen taxi GPS raw data.}
     \label{fig: raw_data}
 \end{figure}
 
@@ -45,7 +45,7 @@ We take the data of June $1^{st}$ as a case study to give an illustration of our
 
 \begin{table}[htb]
   \begin{center}
-      \caption{Data Cleaning Example on June $1^{st}$}
+      \caption{Data cleaning example on June $1^{st}$.}
       \label{data_cleaning_table}
       \begin{tabular}{ccc}
           \toprule
@@ -67,6 +67,24 @@ We take the data of June $1^{st}$ as a case study to give an illustration of our
   \end{center}
 \end{table}
 
-As shown in the table, half of the records are duplicated. Fortunately the total number of records are large enough to endure the data cleaning procedure. For the $17\%$ zero speed records, the following figure points out the huge impact of removal on the distribution of speed.
+As shown in the table, half of the records are duplicated. Fortunately the total number of records are large enough to endure the data cleaning procedure. For the $17\%$ zero speed records, the following figure points out the huge impact of its removal on the distribution of speed.
+
+\begin{figure}[htb]
+  \centering
+  \caption{Speed distribution before and after cleaning.}
+  \label{fig: speed_distribution}
+  \begin{subfigure}[t]{0.45\linewidth}
+      \centering
+      \includegraphics[width=\textwidth]{images/speed_hist_before.png}
+      \caption{Before}
+      \label{fig: speed_before}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.45\linewidth}
+      \centering
+      \includegraphics[width=\textwidth]{images/speed_hist_after.png}
+      \caption{After}
+      \label{fig: speed_after}
+  \end{subfigure}
+\end{figure}
 
 \subsection{Data Processing}
