@@ -86,5 +86,11 @@ As shown in the table, half of the records are duplicated. Fortunately the total
       \label{fig: speed_after}
   \end{subfigure}
 \end{figure}
+TODO: 图的字有点小
 
-\subsection{Data Processing}
+After data cleaning, we get the GPS point sequences of each car, the next step is to match them to the road network according to their location.
+
+\subsection{Road Network}
+As mentioned in section 2, there are mainly three types of spatial graph that categorized by its vertices, which is grid, sensor or road. For a road network graph, a vertex represents a road and an edge stands for the connectivity between roads. The formal definition has been given in section 3.2. In short, we need to acquire real road map and construct the graph depending on it.
+
+\textit{OpenStreetMap (OSM)}\cite{osm} is a collaborative project to create a free editable geographic database of the world. It is easy to download a map and create a road network graph by \textit{OSM}'s Python API. Our data covers the taxi tracks over the whole Shenzhen, but it is impractical to construct the complete road network of the city due to its huge complexity.
