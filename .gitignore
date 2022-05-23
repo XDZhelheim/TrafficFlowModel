@@ -140,3 +140,4 @@ nohup.out
 .vscode/
 
 scripts/images/
+draw_traj*
