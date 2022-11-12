@@ -8,12 +8,7 @@ import sys
 import argparse
 
 DATA_PATH = "../data/sz_taxi_202006/"
-SEQ_LEN = 5
 NUM_ROADS = 492
-
-GPU_ID = 2
-DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
-
 
 def gen_xy(traj_list, seq_len):
     """
@@ -447,9 +442,60 @@ def tune():
                             plot=False,
                             log=log_file,
                         )
+                        
+def tune_w():
+    net_type = "lstm"
+    embed_dim = 64
+    hidden_dim = 256
+    batch_size = 256
+    lr = 1e-4
+    bi = True
 
+    p = 0.8
+    traj_list_all = np.load(
+        f"../data/sz_taxi_202006/sz_taxi_202006_traj_list_bin_24_sampled_{p}_flatten_id.npy",
+        allow_pickle=True,
+    )
+    
+    for SEQ_LEN in (3, 4, 6, 7, 8, 9, 10):
+        log_file = f"train_w{SEQ_LEN}.log"
 
-if __name__ == "__main__":
+        train_loader, val_loader, test_loader = get_dataloaders(
+            traj_list_all, SEQ_LEN, batch_size=batch_size
+        )
+        model = DontKnowWhat2EatNN(
+            embed_dim=embed_dim,
+            hidden_dim=hidden_dim,
+            net_type=net_type,
+            num_layers=1,
+            use_all_h=False,
+            bidirectional=bi,
+        ).to(DEVICE)
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        model = train(
+            model,
+            train_loader,
+            val_loader,
+            optimizer,
+            criterion,
+            max_epochs=1000,
+            early_stop=10,
+            verbose=1,
+            plot=False,
+            log=log_file,
+        )
+
+        test_loss, test_acc = eval_model(model, test_loader, criterion)
+        with open(log_file, "a") as f:
+            print("Test Loss = %.5f" % test_loss, "Test acc = %.5f " % test_acc, file=f)
+        
+        embedding_matrix=model.get_embed_matrix()
+        np.save(f"./saved/embedding_matrix_w{SEQ_LEN}.npy", embedding_matrix, allow_pickle=True)
+    
+def main():
+    SEQ_LEN = 5 # default 5; try 2 to 10
+
     net_type = "lstm"
     embed_dim = 64
     hidden_dim = 256
@@ -463,7 +509,7 @@ if __name__ == "__main__":
         allow_pickle=True,
     )
 
-    log_file = "train.log"
+    log_file = f"train_w{SEQ_LEN}.log"
 
     train_loader, val_loader, test_loader = get_dataloaders(
         traj_list_all, SEQ_LEN, batch_size=batch_size
@@ -497,3 +543,11 @@ if __name__ == "__main__":
     
     embedding_matrix=model.get_embed_matrix()
     np.save("./saved/embedding_matrix.npy", embedding_matrix, allow_pickle=True)
+
+
+if __name__ == "__main__":
+    GPU_ID = 2
+    DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
+    
+    tune_w()
+    
